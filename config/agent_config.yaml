@@ -1,0 +1,23 @@
+agents:
+  # 일상적인 대화 에이전트
+  - name: "WeatherAgent"
+    description: "날씨를 알려주는 에이전트 , 보유 MCP 서버 : weather_mcp"
+    enabled: true
+    mcp_servers:
+      - weather_mcp
+  - name: "ChatAgent"
+    description: "일상적인 대화를 하는 에이전트, 보유 MCP 서버 : time_mcp"
+    enabled: true
+    mcp_servers:
+      - time_mcp
+  # 코딩 에이전트
+  - name: "CodeAgent"
+    description: "사용자의 요청에 맞게 코드를 생성해주는 에이전트"
+    enabled: true
+    mcp_severs:
+  - name: "SearchAgent"
+    description: "최신 정보를 검색하여 결과를 제시해주는 에이전트, 보유 MCP 서버 : tavily_search"
+    enabled: true
+    mcp_servers:
+      - time_mcp
+      - tavily_search

@@ -1,0 +1,36 @@
+mcp_severs:
+  weather_mcp:
+    transport: "stdio"
+    command: "python"
+    args:
+      - "mcp/weather.py"
+  tavily_search:
+    transport: "stdio"
+    command: "npx"
+    args:
+      - "-y"
+      - "tavily-mcp@0.1.4"
+    env:
+      TAVILY_API_KEY: "${TAVILY_API_KEY}"
+    description: "Tavily search MCP server"
+    enabled: true
+  time_mcp:
+    transport: "stdio"
+    command: "java"
+    args:
+      - "-jar"
+      - "mcp/date.jar"
+    env:
+      JAVA_OPTS: "-Xmx512m"
+    description: "현재 시간을 알려주는 MCP 서버"
+    enabled: true
+  mcp_http:
+    transport:
+    url:
+    description:
+  mcp_stdio:
+    transport:
+    command:
+    args:
+    env:
+    description:

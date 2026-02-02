@@ -1,0 +1,43 @@
+# 기본 LLM 제공자 설정
+llm:
+  provider: "openai"
+  model: "wisenut/wise-lloa-max-1.2.1"
+  temperature: 0.7
+  max_tokens: 8192
+  top_p: 0.95
+  frequency_penalty: 1.0
+
+# 세션 관리 (memory, redis)
+session:
+  storage: "memory" # memory or redis
+
+# 로깅 설정
+logging:
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  file: "logs/app.log" # 로그 파일 경로
+  enable_file_logging: false
+
+# API 서버 설정
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true # Hot Reload (개발 모드)
+
+# CORS 설정
+cors:
+  allow_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+    - "http://localhost:8000"
+  allow_methods:
+    - "*"
+  allow_headers:
+    - "Content-Type"
+    - "Authorization"
+    - "X-Requested-With"
+  allow_credentials: true
+  max_age: 600
+
+config:
+  agent: "./config/agent_config.yaml"
+  mcp: "./config/mcp_config.yaml"

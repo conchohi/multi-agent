@@ -1,0 +1,26 @@
+# LangChain 생태계 (1.x 안정 버전)
+langchain==1.2.7
+langchain-core==1.2.7
+langchain-openai==1.1.7
+langchain-anthropic==1.3.1
+langchain-ollama==1.0.1
+
+# LangGraph (1.0 안정 버전)
+langgraph==1.0.7
+langgraph-checkpoint-redis==0.3.3
+redis==7.1.0
+
+# MCP 및 어댑터
+mcp==1.26.0
+langchain-mcp-adapters==0.2.1
+
+# FastAPI 및 서버
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
+
+# 유틸리티
+python-dotenv==1.2.1
+
+# Pydantic (FastAPI와 호환)
+pydantic==2.12.5
+pydantic-core==2.41.5

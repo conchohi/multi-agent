@@ -9,6 +9,7 @@ LangGraph-based multi-agent chatbot system with dynamic planning, execution, and
 ## Development Commands
 
 ### Running the Application
+
 ```bash
 # Start FastAPI server (default: http://0.0.0.0:8000)
 python main.py
@@ -21,6 +22,7 @@ pip install -r requirements.txt
 ```
 
 ### Environment Setup
+
 - Copy `.env.example` to `.env` and configure:
   - `OPENAI_API_KEY` and `OPENAI_API_BASE` for OpenAI models
   - `ANTHROPIC_API_KEY` for Claude models
@@ -29,16 +31,21 @@ pip install -r requirements.txt
 ## Core Architecture
 
 ### Graph Workflow (app/graph.py)
+
 The system uses a LangGraph StateGraph with the following node execution flow:
 
 ```
-Entry → Planner → Supervisor → [Sub-Agents] → Supervisor → Evaluator → RePlanner/Synthesizer → END
-                      ↑                |                        |              |
-                      └────────────────┘                        └──────────────┘
-                        (循環執行)                                  (再計劃 3次上限)
+Entry → Planner → Supervisor → [Sub-Agents] → Supervisor → Evaluator  ──┐
+                      ↑             (parallel/sequential)      |        |
+                      |                                        |        ↓
+                      |                                        |   Synthesizer → END
+                      |                                        ↓
+                      └────────────────── RePlanner ←─────────┘
+                                       (max 3 times)
 ```
 
 **Key Nodes:**
+
 1. **Planner** (app/node/plan.py): Analyzes user query and creates ExecutionPlan with steps, reasoning, and execution mode (sequential/parallel)
 2. **Supervisor** (app/node/supervisor.py): Routes tasks to appropriate agents based on the plan's execution mode (sequential or parallel via Send)
 3. **Sub-Agents** (app/node/sub/agent_node.py): Execute tasks using ReAct pattern with MCP tools. Each agent has a specific prompt and MCP server configuration
@@ -47,6 +54,7 @@ Entry → Planner → Supervisor → [Sub-Agents] → Supervisor → Evaluator �
 6. **Synthesizer** (app/node/synthesizer.py): Generates final user-facing answer from all agent results
 
 ### State Management (app/state.py)
+
 - **AgentState**: Main state for the entire workflow
   - `plans`: List of all execution plans (including replans)
   - `agent_results`: Accumulated results from all agent executions
@@ -58,10 +66,12 @@ Entry → Planner → Supervisor → [Sub-Agents] → Supervisor → Evaluator �
 - **SubAgentState**: Passed to individual agent nodes
   - `query`: Original user query
   - `task`: Specific task for the agent
-  - `agent_results`: Recent results (最新 3件) from previous agents
+  - `agent_results`: Recent results (latest 3) from previous agents
 
 ### MCP Integration (app/node/sub/agent_node.py)
+
 Agents use Model Context Protocol (MCP) to access external tools:
+
 - MCP client initialization in `AgentNode.initialize()`
 - Supports both stdio and HTTP transports
 - Tools are loaded via `MultiServerMCPClient.get_tools()`
@@ -71,6 +81,7 @@ Agents use Model Context Protocol (MCP) to access external tools:
 ### Configuration System
 
 **Three-tier configuration:**
+
 1. **config/config.yaml**: Main settings
    - LLM provider (OpenAI/Anthropic/Ollama), model, temperature
    - Session storage (memory/redis)
@@ -95,11 +106,13 @@ Agents use Model Context Protocol (MCP) to access external tools:
 - `GET /api/health`: Health check endpoint
 
 **Session Management:**
+
 - Sessions use `thread_id` in config for LangGraph checkpointing
 - Enables multi-turn conversations with state persistence
 - Supports memory or Redis-backed storage
 
 ### Checkpointing (app/util/checkpointer_factory.py)
+
 - **Memory**: In-memory state (default, not persistent)
 - **Redis**: Persistent state with `langgraph-checkpoint-redis`
 - Configured via `session.storage` in config.yaml
@@ -107,6 +120,7 @@ Agents use Model Context Protocol (MCP) to access external tools:
 ## Important Implementation Patterns
 
 ### Adding New Agents
+
 1. Create agent in `config/agent_config.yaml` with name, description, mcp_servers
 2. Create prompt file in `prompts/{AgentName}_prompt.txt`
 3. Add agent name to Step.agent Literal type in `app/state.py`
@@ -114,16 +128,19 @@ Agents use Model Context Protocol (MCP) to access external tools:
 5. AgentNode handles MCP tool loading and ReAct execution
 
 ### Modifying LLM Providers
+
 - Edit `config/config.yaml` llm section
 - Supported providers: "openai", "anthropic", "ollama"
 - Each agent can override with custom LLM via `agent.llm` in config
 
 ### Prompt Engineering
+
 - Prompts located in `prompts/` directory
 - Loaded by LLMNode base class via `prompt_file` parameter
 - Use jinja2 template syntax if needed (loaded as plain text by default)
 
 ### Parallel vs Sequential Execution
+
 - Planner determines execution_mode based on task dependencies
 - Supervisor uses `Send()` for parallel execution via `routing_decision.is_parallel`
 - Parallel tasks are sent simultaneously to multiple agents

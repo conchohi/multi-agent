@@ -2,22 +2,20 @@
 사용자 질문에 따라 실행 계획 수립
 """
 import json
-from typing import List, Dict, Any
+from typing import Dict, Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from pydantic import ValidationError
 
 from app.node.llm_node import LLMNode
 from app.state import AgentState, Step, ExecutionPlan
-from app.model.settings import AgentConfig
 from app.util.logger import get_logger
 
 logger = get_logger(__name__)
 
 class Planner(LLMNode):
-    def __init__(self, llm: BaseChatModel, agent_configs: List[AgentConfig], prompt_file: str = None):
+    def __init__(self, llm: BaseChatModel, prompt_file: str = None):
         super().__init__("plan", llm, prompt_file)
-        self.agent_config_list = [agent for agent in agent_configs if agent.enabled]
 
     async def plan_node(self, state: AgentState) -> Dict[str, Any]:
         """
@@ -41,16 +39,10 @@ class Planner(LLMNode):
         logger.info(f"[PLAN] 초기 계획 수립 중...")
         logger.info(f"사용자 요청: {user_query}")
 
-        sub_agent_description = '\n'.join(
-            f"- {agent.name} : {agent.description}"
-            for agent in self.agent_config_list
-        )
-
         # 대화 내역을 문자열로 포맷팅
         conversation_history = '\n'.join(conversation_histories) if conversation_histories else "No previous conversation"
 
         logger.debug(f"대화 내용 : {conversation_history}")
-        logger.debug(f"서브 에이전트 정보 : {sub_agent_description}")
 
         try:
             structured_llm = self.llm.with_structured_output(ExecutionPlan)
@@ -58,7 +50,6 @@ class Planner(LLMNode):
 
             execution_plan = await plan_chain.ainvoke({
                 "user_query" : user_query,
-                "sub_agent_description" : sub_agent_description,
                 "conversation_history" : conversation_history
             })
             
@@ -80,16 +71,15 @@ class Planner(LLMNode):
     
     def _create_fallback_plan(self, user_query: str, error_message: str):
         step = Step(
-            agent = self.agent_config_list[0].name,
             task = user_query,
             step_number = 1
         )
-            
+
         execution_plan = ExecutionPlan(
             steps = [step],
             reasoning = f"계획 수립 중 예외 발생으로 기본 계획 생성 : {error_message}",
             total_steps=1,
             execution_mode="sequential"
-        )     
-        
+        )
+
         return execution_plan

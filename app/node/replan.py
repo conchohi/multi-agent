@@ -2,22 +2,20 @@
 최종 답변이 부족할 경우 계획 재수립
 """
 import json
-from typing import List, Dict, Any
+from typing import Dict, Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from pydantic import ValidationError
 
 from app.node.llm_node import LLMNode
 from app.state import AgentState, Step, ExecutionPlan
-from app.model.settings import AgentConfig
 from app.util.logger import get_logger
 
 logger = get_logger(__name__)
 
 class RePlanner(LLMNode):
-    def __init__(self, llm: BaseChatModel, agent_configs: List[AgentConfig], prompt_file: str = None):
+    def __init__(self, llm: BaseChatModel, prompt_file: str = None):
         super().__init__("replan", llm, prompt_file)
-        self.agent_config_list = [agent for agent in agent_configs if agent.enabled]
 
     async def replan_node(self, state: AgentState) -> Dict[str, Any]:
         """
@@ -47,11 +45,6 @@ class RePlanner(LLMNode):
                     부족한 정보 : {missing_info},\n
                     제안 : {suggestions}""")
 
-        sub_agent_description = '\n'.join(
-            f"- {agent.name} : {agent.description}"
-            for agent in self.agent_config_list
-        )
-
         conversation_history = '\n'.join(conversation_histories) if conversation_histories else "No previous conversation"
 
         try:
@@ -60,7 +53,6 @@ class RePlanner(LLMNode):
 
             execution_plan = await replan_chain.ainvoke({
                 "user_query": user_query,
-                "sub_agent_description": sub_agent_description,
                 "missing_info": missing_info,
                 "suggestions": suggestions,
                 "conversation_history": conversation_history
@@ -91,18 +83,17 @@ class RePlanner(LLMNode):
             Missing Information: {missing_info}
             Suggestions: {suggestions}
         """
-        
+
         step = Step(
-            agent = self.agent_config_list[0].name,
             task = task,
             step_number = 1
         )
-            
+
         execution_plan = ExecutionPlan(
             steps = [step],
             reasoning = f"계획 수립 중 예외 발생으로 기본 계획 생성 : {error_message}",
             total_steps=1,
             execution_mode="sequential"
-        )     
-        
+        )
+
         return execution_plan

@@ -1,7 +1,5 @@
-from typing import List
 from langchain_core.language_models.chat_models import BaseChatModel
 from langgraph.graph import StateGraph, END
-from langgraph.types import Send
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.node.plan import Planner
@@ -25,75 +23,52 @@ async def create_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver) ->
         컴파일된 LangGraph StateGraph
     """
     logger.info("[GRAPH] PLAN + ReAct + Multi-Agent 기반 LangGraph 생성")
-    
+
     # 설정 로드 (Agent, MCP 서버, LLM 세팅)
     agent_config = get_agent_config()
     mcp_server_config = get_mcp_config()
-    
+
+    # AgentNode 인스턴스들 먼저 생성
+    agent_nodes = []
+    for agent in agent_config:
+        if agent.enabled:
+            agent_llm = build_agent_llm(agent.llm) if agent.llm else llm
+            agent_node = AgentNode(llm=agent_llm, agent=agent, mcp_configs=mcp_server_config)
+            agent_nodes.append(agent_node)
+
     # 노드 초기화
-    planner = Planner(llm, agent_config)
-    supervisor = Supervisor(agent_config)
+    planner = Planner(llm)
+    supervisor = Supervisor(llm, agent_nodes)
     evaluator = Evaluator(llm)
-    replanner = RePlanner(llm, agent_config)
+    replanner = RePlanner(llm)
     synthesizer = Synthesizer(llm)
-    
+
     # 그래프 구성
     graph = StateGraph(AgentState)
-    
+
     # 노드 추가
     graph.add_node("planner", planner.plan_node)
     graph.add_node("supervisor", supervisor.supervisor_node)
     graph.add_node("evaluator", evaluator.evaluator_node)
     graph.add_node("replanner", replanner.replan_node)
     graph.add_node("synthesizer", synthesizer.synthesizer_node)
-    
-    for agent in agent_config:
-        agent_llm = build_agent_llm(agent.llm) if agent.llm else llm
-        graph.add_node(agent.name, AgentNode(llm=agent_llm, agent=agent, mcp_configs=mcp_server_config).execute)
-        
+
+    # 그래프 연결 (단순화된 구조)
     graph.set_entry_point("planner")
-    
     graph.add_edge("planner", "supervisor")
+    graph.add_edge("supervisor", "evaluator")
     graph.add_edge("replanner", "supervisor")
-    
-    graph.add_conditional_edges(
-        "supervisor",
-        _route_to_agent
-    )
-    
-    for agent in agent_config:
-        graph.add_edge(agent.name, "supervisor")
-    
+
     graph.add_conditional_edges(
         'evaluator',
         _route_after_evaluation
     )
-    
+
     graph.add_edge("synthesizer", END)
-    
+
     return graph.compile(checkpointer=checkpointer)
 
         
-def _route_to_agent(state: AgentState) -> str | Send | List[Send]:
-    user_query = state.get('query')
-    routing_decision = state.get("routing_decision")
-    agent_results = state.get('agent_results')
-    
-    if routing_decision.is_parallel:
-        next_steps = routing_decision.next_steps
-        next_agents = [step.agent for step in next_steps]
-        logger.info(f"[GRAPH] 병렬 실행 처리 : {next_agents}")
-        return [Send(step.agent, {"agent_name" : step.agent, "query" : user_query, "task": step.task, "step_number" : step.step_number, "agent_results" : agent_results}) for step in next_steps]
-    
-    next_step = routing_decision.next_step
-
-    if not next_step:
-        logger.info("[GRAPH] 단계 실행 종료 -> EVALUATOR 노드 이동")
-        return "evaluator"
-
-    logger.info(f"[GRAPH] 순차 실행 처리 : {next_step.agent}")
-    return Send(next_step.agent, {"agent_name" : next_step.agent, "query" : user_query, "task": next_step.task, "step_number" : next_step.step_number, "agent_results" : agent_results})
-
 def _route_after_evaluation(state: AgentState) -> str:
     evaluation = state.get("evaluation")
     status = evaluation.status

@@ -93,8 +93,7 @@ async def query(request: QueryRequest):
             PlanResponse(
                 reasoning=plan.reasoning,
                 total_steps=plan.total_steps,
-                execution_mode=plan.execution_mode,
-                use_agents=[step.agent for step in plan.steps]
+                execution_mode=plan.execution_mode
             )
             for plan in final_state.get("plans", [])
         ]

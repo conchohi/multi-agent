@@ -14,8 +14,7 @@ def list_reducer(existing: List[str], new: List[str] | None) -> List[str]:
     return existing + new
 
 class Step(BaseModel):
-    agent: Literal['ChatAgent', 'CodeAgent', 'SearchAgent', 'WeatherAgent'] = Field(..., description="단계 실행 에이전트")
-    task: str = Field(..., description="에이전트의 담당 업무")
+    task: str = Field(..., description="수행할 업무")
     step_number: int = Field(default=0, ge=0, description="실행 단계 순서")
 
 # PLAN 상태 정의
@@ -25,11 +24,6 @@ class ExecutionPlan(BaseModel):
     total_steps: int = Field(..., description="전체 단계 수")
     execution_mode: Literal['sequential', 'parallel'] = Field(..., description="계획 실행 모드 (순차적, 병렬적)")
 
-class RoutingDecision(BaseModel):
-    next_step: Optional[Step] = Field(default=None, description="순차 작업 시 다음 실행할 에이전트")
-    next_steps: List[Step] = Field(default=[], description="병렬 작업 시 실행할 에이전트들")
-    is_parallel: bool = Field(default=False, description="병렬 처리 여부")
-    
 class AgentResult(BaseModel):
     name: str = Field(..., description="서브 에이전트 명")
     task: str = Field(..., description="서브 에이전트 처리할 일")
@@ -50,22 +44,17 @@ class AgentState(TypedDict):
     # 계획, 재계획
     plans: Annotated[List[ExecutionPlan], list_reducer]
     plan: Optional[ExecutionPlan]
-    current_step: int
     replan_count: int
-
-    # 실행 관리
-    routing_decision: Optional[RoutingDecision]
-    running_steps: bool
 
     # 서브 에이전트 실행 결과
     agent_results: Annotated[List[AgentResult], list_reducer]
-    
+
     # 평가
     evaluation: Optional[Evaulation]
-    
+
     # 최종 결과 표시
     final_answer: Optional[str]
-    
+
     # 대화내역
     conversation_histories: Annotated[List[str], operator.add]
     

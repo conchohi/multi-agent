@@ -110,25 +110,23 @@ class AgentNode(LLMNode):
             # 성공 결과를 AgentResult로 반환
             # operator.add에 의해 메인 State의 agent_results에 추가됨
             return {
-                "messages" : [AIMessage(f"[{self.name}] : {result}")],
-                "agent_results": [AgentResult(
+                "agent_result": AgentResult(
                     name=agent_name,
                     task=task,
                     result=result,
                     step_number=step_number,
                     success=True
-                )]
+                )
             }
             
         except Exception as e:
             # 실패 결과 반환
             return {
-                "messages" : [AIMessage(f"[{self.name}] 요청 예외 발생 : {str(e)}")],
-                "agent_results": [AgentResult(
+                 "agent_result": AgentResult(
                     name=agent_name,
                     task=task,
                     result=f"요청 예외 발생 {str(e)}",
                     step_number=step_number,
                     success=False
-                )]
+                )
             }

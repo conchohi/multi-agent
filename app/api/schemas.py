@@ -22,7 +22,6 @@ class PlanResponse(BaseModel):
     reasoning: str = Field(..., description="계획 수립 이유")
     total_steps: int = Field(..., description="전체 단계 수")
     execution_mode: Literal['sequential', 'parallel'] = Field(..., description="실행 모드")
-    use_agents: List[str] = Field(default=[], description="계획에 사용된 에이전트")
 
 class QueryResponse(BaseModel):
     """쿼리 응답 스키마 (기본)"""

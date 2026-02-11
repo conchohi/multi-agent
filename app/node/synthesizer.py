@@ -53,7 +53,8 @@ class Synthesizer(LLMNode):
                 "status" : status,
                 "missing_info" : missing_info
             })
-            logger.info(f"[SYNTHESIZER] 최종 답변 생성 : {final_answer[:10]}")
+            logger.info(f"[SYNTHESIZER] 최종 답변 생성!")
+            logger.debug(f"[SYNTHESIZER] 최종 답변 결과 : {final_answer}")
             
         except Exception as e:
             logger.error(f"[SYNTHESIZER] 최종 답변 생성 중 예외 발생: {str(e)}")

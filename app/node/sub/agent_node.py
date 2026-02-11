@@ -14,7 +14,14 @@ from app.util.logger import get_logger
 logger = get_logger(__name__)
 
 class AgentNode(LLMNode):
-    def __init__(self, llm: BaseChatModel, agent: AgentConfig, mcp_configs: Dict[str, McpConfig] = {}, tools: List[BaseTool] = []):
+    def __init__(
+        self,
+        llm: BaseChatModel,
+        agent: AgentConfig,
+        mcp_configs: Dict[str, McpConfig] = {},
+        tools: List[BaseTool] = [],
+        max_recent_results: int = 3  # 설정 가능한 제한값
+    ):
         super().__init__(name=agent.name, llm=llm, prompt_file=agent.prompt_file)
         self.description = agent.description
         self.base_tools: List[BaseTool] = tools if tools else []
@@ -24,6 +31,7 @@ class AgentNode(LLMNode):
             for mcp_server in agent.mcp_servers
         } if mcp_configs else {}
         self.mcp_client: Optional[MultiServerMCPClient] = None
+        self.max_recent_results = max_recent_results
         self._initialized = False
         
     async def initialize(self):
@@ -64,51 +72,51 @@ class AgentNode(LLMNode):
             return
 
         # Use MultiServerMCPClient's get_tools method
-        mcp_tools = await self.mcp_client.get_tools()
-        self.mcp_tools = mcp_tools
-
-        logger.info(f"  📦 Loaded {len(mcp_tools)} MCP tools")
+        self.mcp_tools = await self.mcp_client.get_tools()
+        logger.info(f"  📦 Loaded {len(self.mcp_tools)} MCP tools")
     
     async def execute(self, state: SubAgentState) -> Dict[str, Any]:
-        if not self.mcp_client:
+        """
+        Agent 실행
+
+        Args:
+            state: SubAgentState
+
+        Returns:
+            agent_result를 포함한 딕셔너리
+        """
+        if not self.mcp_client and self.mcp_configs:
             await self.initialize()
-            
-        task = state['task'] # 수행할 업무
-        query = state['query']  # 전체 컨텍스트
+
+        # State에서 필드 추출
+        task = state['task']
+        query = state['query']
         agent_name = state['agent_name']
-        step_number = state.get('step_number', 0)  # 단계 번호
-        
-        agent_results = state["agent_results"]
+        step_number = state.get('step_number', 0)
+        agent_results = state.get("agent_results", [])
 
-        # 최신 3건만 가져오기
-        recent_agent_results = agent_results[-3:] if agent_results else []
+        logger.info(f"[{self.name}] 태스크 실행: {task}")
 
-        agent_summary = '\n'.join(
-            f"{agent_result.name} : {agent_result.result}"
-            for agent_result in recent_agent_results
-        ) if recent_agent_results else "No previous agent execution"
-        
-        logger.info(f"[{self.name}] 태스크 실행 : {task}")
-        # 작업 수행
         try:
-            # ReAct agent로 작업 실행
+            # Agent 메시지 구성
+            message = self._build_agent_message(query, task, agent_results)
+
+            # ReAct agent 실행
             all_tools = self.base_tools + self.mcp_tools
+
             agent_graph = create_react_agent_graph(
                 llm=self.llm,
                 tools=all_tools,
                 system_prompt=self.prompt
             )
-            
-            message = f"User Query : {query}\nTask : {task}\nAgent Results : {agent_summary}"
-            
+
             graph_result = await agent_graph.ainvoke({
                 "messages": [HumanMessage(message)]
             })
-            
+
             result = graph_result['messages'][-1].content
             
-            # 성공 결과를 AgentResult로 반환
-            # operator.add에 의해 메인 State의 agent_results에 추가됨
+            # 성공 결과 반환
             return {
                 "agent_result": AgentResult(
                     name=agent_name,
@@ -118,15 +126,43 @@ class AgentNode(LLMNode):
                     success=True
                 )
             }
-            
+
         except Exception as e:
+            logger.error(f"[{self.name}] 태스크 실행 예외 발생: {str(e)}")
             # 실패 결과 반환
             return {
-                 "agent_result": AgentResult(
+                "agent_result": AgentResult(
                     name=agent_name,
                     task=task,
-                    result=f"요청 예외 발생 {str(e)}",
+                    result=f"태스크 실행 중 예외 발생: {str(e)}",
                     step_number=step_number,
                     success=False
                 )
             }
+
+    def _build_agent_message(
+        self,
+        query: str,
+        task: str,
+        agent_results: List[AgentResult]
+    ) -> str:
+        """
+        Agent에 전달할 메시지 구성
+
+        Args:
+            query: 사용자 쿼리
+            task: 실행할 작업
+            agent_results: 이전 결과들
+
+        Returns:
+            포맷팅된 메시지
+        """
+        # 최신 N건만 가져오기 (설정 가능)
+        recent_agent_results = agent_results[-self.max_recent_results:] if agent_results else []
+
+        agent_summary = '\n'.join(
+            f"{agent_result.name}: {agent_result.result}"
+            for agent_result in recent_agent_results
+        ) if recent_agent_results else "No previous agent execution"
+
+        return f"User Query: {query}\nTask: {task}\nAgent Results: {agent_summary}"

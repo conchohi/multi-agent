@@ -69,12 +69,12 @@ class RePlanner(LLMNode):
             execution_plan = self._create_fallback_plan(user_query, missing_info, suggestions, str(e))
 
         return {
-                "messages" : [AIMessage(content=f"[REPLAN] 계획 수립 [{execution_plan.execution_mode} {execution_plan.total_steps} Step] : {execution_plan.reasoning}")], 
+                "messages" : [AIMessage(content=f"[REPLAN] 계획 수립 [{execution_plan.execution_mode} {execution_plan.total_steps} Step] : {execution_plan.reasoning}")],
                 "plan": execution_plan,
                 "plans" : [execution_plan],
                 "replan_count" : replan_count + 1,
-                "current_step" : 0,
-                "running_steps" : False,
+                "current_step": 0,
+                "task_assignments" : []
             }
     
     def _create_fallback_plan(self, user_query: str, missing_info: str, suggestions: str, error_message: str):

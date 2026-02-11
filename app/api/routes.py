@@ -76,10 +76,9 @@ async def query(request: QueryRequest):
             "messages": [HumanMessage(content=request.query)],
             "plans": None,
             "plan": None,
-            "current_step": 0,
             "replan_count": 0,
-            "routing_dicision": None,
-            "running_steps": [],
+            "current_step": 0,
+            "task_assignments": None,
             "agent_results": None,
             "evaluation": None,
             "final_answer": None,
@@ -157,10 +156,9 @@ async def query_stream(request: QueryRequest):
                 "messages": [HumanMessage(content=request.query)],
                 "plans": None,
                 "plan": None,
-                "current_step": 0,
                 "replan_count": 0,
-                "routing_dicision": None,
-                "running_steps": [],
+                "current_step": 0,
+                "task_assignments": None,
                 "agent_results": None,
                 "evaluation": None,
                 "final_answer": None,
@@ -178,35 +176,72 @@ async def query_stream(request: QueryRequest):
                         data={}
                     )
 
-                    # Plan 이벤트
-                    if node_name == "planner" and state_update.get("plan"):
+                    # Plan 이벤트 (planner / replanner)
+                    if node_name in ("planner", "replanner") and state_update.get("plan"):
+                        steps = []
                         plan = state_update["plan"]
+                        
+                        for step in plan.steps:
+                            steps.append(step.task)
+
                         stream_event = StreamEvent(
                             event="plan",
                             node=node_name,
                             data={
+                                "steps" : steps,
                                 "reasoning": plan.reasoning,
                                 "total_steps": plan.total_steps,
                                 "execution_mode": plan.execution_mode
                             }
                         )
+                        yield f"data: {stream_event.model_dump_json()}\n\n"
 
-                    # Agent 결과 이벤트
-                    elif state_update.get("agent_results"):
-                        for result in state_update["agent_results"]:
-                            stream_event = StreamEvent(
-                                event="agent_result",
-                                node=node_name,
-                                data={
-                                    "name": result.name,
-                                    "task": result.task,
-                                    "result": result.result,
-                                    "step_number": result.step_number,
-                                    "success": result.success
-                                }
-                            )
-                            yield f"data: {stream_event.model_dump_json()}\n\n"
-                            continue
+                    # supervisor 노드의 agent 지정 결과 이벤트
+                    elif node_name == "supervisor" and state_update.get("task_assignments"):
+                        assignments = []
+                        for task_assignment in state_update.get("task_assignments"):
+                            assignments.append({
+                                "agent_name" : task_assignment.get("agent_name"),
+                                "task": task_assignment.get("task"),
+                                "step_number": task_assignment.get("step_number")
+                            })
+                            
+                        stream_event = StreamEvent(
+                            event="supervisor",
+                            node=node_name,
+                            data={
+                                "assignments" : assignments
+                            }
+                        )
+                        yield f"data: {stream_event.model_dump_json()}\n\n"
+                    
+                    # 에이전트 노드 실행 결과 이벤트 (agent_*)
+                    elif node_name.startswith("agent_") and state_update.get("agent_results"):
+                        result = state_update["agent_results"][-1]
+                        stream_event = StreamEvent(
+                            event="agent_result",
+                            node=node_name,
+                            data={
+                                "name": result.name,
+                                # "task": result.task,
+                                "result": result.result,
+                                "step_number": result.step_number,
+                                "success": result.success
+                            }
+                        )
+                        yield f"data: {stream_event.model_dump_json()}\n\n"
+                    
+                    # 에이전트 실행 결과 평가 이벤트
+                    elif node_name.startswith("evaluator") and state_update.get("evaluation"):
+                        evaluation = state_update["evaluation"]
+                        stream_event = StreamEvent(
+                            event="evaluation",
+                            node=node_name,
+                            data={
+                                "evaluation" : evaluation
+                            }
+                        )
+                        yield f"data: {stream_event.model_dump_json()}\n\n"
 
                     # 최종 답변 이벤트
                     elif node_name == "synthesizer" and state_update.get("final_answer"):
@@ -217,8 +252,10 @@ async def query_stream(request: QueryRequest):
                                 "answer": state_update["final_answer"]
                             }
                         )
+                        yield f"data: {stream_event.model_dump_json()}\n\n"
 
-                    yield f"data: {stream_event.model_dump_json()}\n\n"
+                    else:
+                        yield f"data: {stream_event.model_dump_json()}\n\n"
 
             # 완료 신호
             yield "data: {\"event\": \"done\"}\n\n"

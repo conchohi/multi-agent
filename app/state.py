@@ -45,6 +45,10 @@ class AgentState(TypedDict):
     plans: Annotated[List[ExecutionPlan], list_reducer]
     plan: Optional[ExecutionPlan]
     replan_count: int
+    current_step: Annotated[int, lambda a, b: max(a, b)]
+
+    # Supervisor → Agent 노드 라우팅 정보
+    task_assignments: Optional[List[Dict[str, Any]]]
 
     # 서브 에이전트 실행 결과
     agent_results: Annotated[List[AgentResult], list_reducer]
@@ -57,7 +61,7 @@ class AgentState(TypedDict):
 
     # 대화내역
     conversation_histories: Annotated[List[str], operator.add]
-    
+
 class SubAgentState(TypedDict):
     agent_name: str
     query: str

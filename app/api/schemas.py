@@ -35,7 +35,7 @@ class QueryResponse(BaseModel):
 
 class StreamEvent(BaseModel):
     """스트리밍 이벤트"""
-    event: Literal['node', 'plan', 'agent_result', 'final_answer', 'error'] = Field(..., description="이벤트 타입")
+    event: Literal['node', 'plan', 'supervisor', 'agent_result', 'evaluation','final_answer', 'error'] = Field(..., description="이벤트 타입")
     node: Optional[str] = Field(default=None, description="현재 노드 이름")
     data: Optional[dict] = Field(default=None, description="이벤트 데이터")
 

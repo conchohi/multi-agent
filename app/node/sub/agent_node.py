@@ -75,22 +75,20 @@ class AgentNode(LLMNode):
         self.mcp_tools = await self.mcp_client.get_tools()
         logger.info(f"  📦 Loaded {len(self.mcp_tools)} MCP tools")
     
-    async def execute(self, state: SubAgentState) -> Dict[str, Any]:
+    async def graph_node(self, state: SubAgentState) -> Dict[str, Any]:
         """
-        Agent 실행
+        LangGraph 그래프 노드 메서드 (Send를 통해 SubAgentState를 수신)
 
         Args:
-            state: SubAgentState
+            state: Supervisor가 Send()로 전달한 SubAgentState
 
         Returns:
-            agent_result를 포함한 딕셔너리
+            AgentState 업데이트 (agent_results 추가, current_step 증가)
         """
         if not self.mcp_client and self.mcp_configs:
             await self.initialize()
 
-        # State에서 필드 추출
         task = state['task']
-        query = state['query']
         agent_name = state['agent_name']
         step_number = state.get('step_number', 0)
         agent_results = state.get("agent_results", [])
@@ -98,12 +96,9 @@ class AgentNode(LLMNode):
         logger.info(f"[{self.name}] 태스크 실행: {task}")
 
         try:
-            # Agent 메시지 구성
-            message = self._build_agent_message(query, task, agent_results)
+            message = self._build_agent_message(task, agent_results)
 
-            # ReAct agent 실행
             all_tools = self.base_tools + self.mcp_tools
-
             agent_graph = create_react_agent_graph(
                 llm=self.llm,
                 tools=all_tools,
@@ -115,34 +110,32 @@ class AgentNode(LLMNode):
             })
 
             result = graph_result['messages'][-1].content
-            
-            # 성공 결과 반환
-            return {
-                "agent_result": AgentResult(
-                    name=agent_name,
-                    task=task,
-                    result=result,
-                    step_number=step_number,
-                    success=True
-                )
-            }
+
+            agent_result = AgentResult(
+                name=agent_name,
+                task=task,
+                result=result,
+                step_number=step_number,
+                success=True
+            )
 
         except Exception as e:
             logger.error(f"[{self.name}] 태스크 실행 예외 발생: {str(e)}")
-            # 실패 결과 반환
-            return {
-                "agent_result": AgentResult(
-                    name=agent_name,
-                    task=task,
-                    result=f"태스크 실행 중 예외 발생: {str(e)}",
-                    step_number=step_number,
-                    success=False
-                )
-            }
+            agent_result = AgentResult(
+                name=agent_name,
+                task=task,
+                result=f"태스크 실행 중 예외 발생: {str(e)}",
+                step_number=step_number,
+                success=False
+            )
+
+        return {
+            "agent_results": [agent_result],
+            "current_step": step_number
+        }
 
     def _build_agent_message(
         self,
-        query: str,
         task: str,
         agent_results: List[AgentResult]
     ) -> str:
@@ -165,4 +158,4 @@ class AgentNode(LLMNode):
             for agent_result in recent_agent_results
         ) if recent_agent_results else "No previous agent execution"
 
-        return f"User Query: {query}\nTask: {task}\nAgent Results: {agent_summary}"
+        return f"Task: {task}\nAgent Results: {agent_summary}"

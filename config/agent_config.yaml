@@ -1,12 +1,12 @@
 agents:
   # 일상적인 대화 에이전트
   - name: "WeatherAgent"
-    description: "날씨를 알려주는 에이전트 , 보유 MCP 서버 : weather_mcp"
+    description: "날씨를 알려주는 에이전트"
     enabled: true
     mcp_servers:
       - weather_mcp
   - name: "ChatAgent"
-    description: "일상적인 대화를 하는 에이전트, 보유 MCP 서버 : time_mcp"
+    description: "일상적인 대화를 하는 에이전트"
     enabled: true
     mcp_servers:
       - time_mcp
@@ -16,8 +16,13 @@ agents:
     enabled: true
     mcp_severs:
   - name: "SearchAgent"
-    description: "최신 정보를 검색하여 결과를 제시해주는 에이전트, 보유 MCP 서버 : tavily_search"
+    description: "최신 정보를 검색하여 결과를 제시해주는 에이전트"
     enabled: true
     mcp_servers:
       - time_mcp
       - tavily_search
+  - name: "DocumentGeneratorAgent"
+    description: "사용자의 요청에 맞게 문서를 생성해주는 에이전트"
+    enabled: true
+    mcp_servers:
+      - mcp_http_document_generator

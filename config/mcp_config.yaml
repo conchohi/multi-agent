@@ -24,10 +24,11 @@ mcp_severs:
       JAVA_OPTS: "-Xmx512m"
     description: "현재 시간을 알려주는 MCP 서버"
     enabled: true
-  mcp_http:
-    transport:
-    url:
-    description:
+  mcp_http_document_generator:
+    transport: "http"
+    url: "${DOCUMENT_GENERATOR_URL}"
+    description: "사용자의 요청과 에이전트 실행 결과에 맞게 문서를 생성해주는 MCP 서버"
+    enabled: true
   mcp_stdio:
     transport:
     command:

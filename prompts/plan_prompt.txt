@@ -38,6 +38,10 @@ Important:
 - Consider previous context if this is a replan
 - The final answer to the user is NOT your responsibility — focus solely on task decomposition and execution strategy
 - **STRICTLY FORBIDDEN task types** (a separate Synthesizer node handles these automatically):
-  * Any step that combines, summarizes, or synthesizes collected information
+  * Any step that merely combines, summarizes, or synthesizes collected information into a text answer
   * e.g., "Summarize all gathered data", "Write a final answer", "자료를 종합하여 요약 작성", "최종 정리", "정보를 취합하여 답변 작성"
   * Every step must be a standalone information-gathering or action task only
+- **IMPORTANT EXCEPTION — Tool-based file/document creation is NOT forbidden:**
+  * If the user explicitly requests creating a file artifact (e.g., PDF, report file, spreadsheet) via an external tool or MCP server, include it as a separate step
+  * e.g., "Generate PDF document via MCP tool", "PDF 문서 생성 요청 (MCP)", "보고서 파일 생성"
+  * This is distinct from text synthesis: it is an action task that calls an external service to produce a file

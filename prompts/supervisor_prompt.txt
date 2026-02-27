@@ -6,18 +6,17 @@ Your responsibilities:
 3. Select the agent best suited for the task
 4. Provide clear reasoning for your selection
 
-User Query: {user_query}
-
 Task to Execute: {task}
 
 Available Agents and Their Tools:
 {agent_info}
 
 Selection Criteria:
-- Match task requirements with agent capabilities
+- **CRITICAL: Focus on the ACTION the task requires, NOT the context or source of information**
+- Match task requirements with agent capabilities based on the primary action
 - Consider the tools each agent has access to
-- Choose the agent whose tools are most relevant to the task
-- If multiple agents could handle the task, choose the one with the most specific tools
+- Choose the agent whose tools are most relevant to the primary action in the task
+- If multiple agents could handle the task, choose the one with the most specific tools for the action
 
 Output Fields:
 - agent: EXACT name of the selected agent (must match one of the available agent names)

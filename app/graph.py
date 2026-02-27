@@ -48,6 +48,10 @@ async def create_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver) ->
     replanner = RePlanner(llm)
     synthesizer = Synthesizer(llm)
 
+    # 서버 시작 시 Supervisor(Agent MCP tools) 미리 초기화
+    await supervisor.initialize()
+    logger.info("[GRAPH] Supervisor 초기화 완료")
+
     # 그래프 구성
     graph = StateGraph(AgentState)
 
@@ -101,13 +105,14 @@ def _route_from_supervisor(state: AgentState) -> List[Send]:
     query = state.get('query', '')
 
     sends = []
+    
     for assignment in task_assignments:
         sub_state = {
             "agent_name": assignment["agent_name"],
             "query": query,
             "task": assignment["task"],
             "step_number": assignment["step_number"],
-            "agent_results": assignment["agent_results"]
+            "agent_results": state["agent_results"]
         }
         node_name = f"agent_{assignment['agent_name']}"
         logger.info(f"[GRAPH] Send → {node_name}: {assignment['task']}")

@@ -165,30 +165,58 @@ async def query_stream(request: QueryRequest):
                 "conversation_histories": []
             }
 
-            # 그래프 스트리밍 실행 (config 추가)
-            async for event in graph.astream(initial_state, config=config):
-                # event는 {node_name: state_update} 형태
-                for node_name, state_update in event.items():
-                    # 노드 실행 이벤트
-                    stream_event = StreamEvent(
-                        event="node",
-                        node=node_name,
-                        data={}
-                    )
+            # astream_events로 LLM 토큰 단위 스트리밍 지원
+            async for event in graph.astream_events(initial_state, config=config, version="v2"):
+                event_type = event["event"]
+                event_name = event.get("name", "")
+                node_name = event.get("metadata", {}).get("langgraph_node", "")
+
+                # LLM 토큰 스트리밍 이벤트 처리
+                if event_type == "on_chat_model_stream" and node_name:
+                    chunk = event["data"]["chunk"]
+                    content = chunk.content
+
+                    # OpenAI: str / Anthropic: list of content blocks
+                    token = ""
+                    if isinstance(content, str):
+                        token = content
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                token = block.get("text", "")
+                                break
+
+                    if not token:
+                        continue
+
+                    if node_name == "synthesizer":
+                        stream_event = StreamEvent(
+                            event="final_answer_chunk",
+                            node=node_name,
+                            data={"token": token}
+                        )
+                        yield f"data: {stream_event.model_dump_json()}\n\n"
+
+                    # elif node_name == "agent":
+                    #     stream_event = StreamEvent(
+                    #         event="agent_result_chunk",
+                    #         node=node_name,
+                    #         data={"token": token}
+                    #     )
+                    #     yield f"data: {stream_event.model_dump_json()}\n\n"
+
+                # 노드 완료 이벤트 처리 (event name == langgraph node name: 노드 자체 이벤트)
+                elif event_type == "on_chain_end" and event_name == node_name and node_name:
+                    output = event["data"].get("output") or {}
 
                     # Plan 이벤트 (planner / replanner)
-                    if node_name in ("planner", "replanner") and state_update.get("plan"):
-                        steps = []
-                        plan = state_update["plan"]
-                        
-                        for step in plan.steps:
-                            steps.append(step.task)
-
+                    if node_name in ("planner", "replanner") and output.get("plan"):
+                        plan = output["plan"]
                         stream_event = StreamEvent(
                             event="plan",
                             node=node_name,
                             data={
-                                "steps" : steps,
+                                "steps": [step.task for step in plan.steps],
                                 "reasoning": plan.reasoning,
                                 "total_steps": plan.total_steps,
                                 "execution_mode": plan.execution_mode
@@ -197,66 +225,56 @@ async def query_stream(request: QueryRequest):
                         yield f"data: {stream_event.model_dump_json()}\n\n"
 
                     # supervisor 노드의 agent 지정 결과 이벤트
-                    elif node_name == "supervisor" and state_update.get("task_assignments"):
-                        assignments = []
-                        for task_assignment in state_update.get("task_assignments"):
-                            assignments.append({
-                                "agent_name" : task_assignment.get("agent_name"),
-                                "task": task_assignment.get("task"),
-                                "step_number": task_assignment.get("step_number")
-                            })
-                            
+                    elif node_name == "supervisor" and output.get("task_assignments"):
+                        assignments = [
+                            {
+                                "agent_name": ta.get("agent_name"),
+                                "task": ta.get("task"),
+                                "step_number": ta.get("step_number")
+                            }
+                            for ta in output["task_assignments"]
+                        ]
                         stream_event = StreamEvent(
                             event="supervisor",
                             node=node_name,
-                            data={
-                                "assignments" : assignments
-                            }
+                            data={"assignments": assignments}
                         )
                         yield f"data: {stream_event.model_dump_json()}\n\n"
-                    
-                    # 에이전트 노드 실행 결과 이벤트 (agent_*)
-                    elif node_name.startswith("agent_") and state_update.get("agent_results"):
-                        result = state_update["agent_results"][-1]
+
+                    # 에이전트 노드 실행 결과 완료 이벤트 (agent_*)
+                    elif node_name.startswith("agent_") and output.get("agent_results"):
+                        result = output["agent_results"][-1]
                         stream_event = StreamEvent(
                             event="agent_result",
                             node=node_name,
                             data={
                                 "name": result.name,
-                                # "task": result.task,
                                 "result": result.result,
                                 "step_number": result.step_number,
                                 "success": result.success
                             }
                         )
                         yield f"data: {stream_event.model_dump_json()}\n\n"
-                    
+
                     # 에이전트 실행 결과 평가 이벤트
-                    elif node_name.startswith("evaluator") and state_update.get("evaluation"):
-                        evaluation = state_update["evaluation"]
+                    elif node_name.startswith("evaluator") and output.get("evaluation"):
                         stream_event = StreamEvent(
                             event="evaluation",
                             node=node_name,
-                            data={
-                                "evaluation" : evaluation
-                            }
+                            data={"evaluation": output["evaluation"]}
                         )
                         yield f"data: {stream_event.model_dump_json()}\n\n"
 
-                    # 최종 답변 이벤트
-                    elif node_name == "synthesizer" and state_update.get("final_answer"):
+                    # 최종 답변 완료 이벤트 (토큰 스트리밍 후 전체 답변 전송)
+                    """
+                    elif node_name == "synthesizer" and output.get("final_answer"):
                         stream_event = StreamEvent(
                             event="final_answer",
                             node=node_name,
-                            data={
-                                "answer": state_update["final_answer"]
-                            }
+                            data={"answer": output["final_answer"]}
                         )
                         yield f"data: {stream_event.model_dump_json()}\n\n"
-
-                    else:
-                        yield f"data: {stream_event.model_dump_json()}\n\n"
-
+                    """
             # 완료 신호
             yield "data: {\"event\": \"done\"}\n\n"
 

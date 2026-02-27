@@ -1,9 +1,10 @@
 from typing import List, Dict, Optional, Any
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools.base import BaseTool
 from langchain_core.language_models import BaseChatModel
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 
 from app.node.llm_node import LLMNode
 from app.model.settings import AgentConfig, McpConfig
@@ -75,7 +76,7 @@ class AgentNode(LLMNode):
         self.mcp_tools = await self.mcp_client.get_tools()
         logger.info(f"  📦 Loaded {len(self.mcp_tools)} MCP tools")
     
-    async def graph_node(self, state: SubAgentState) -> Dict[str, Any]:
+    async def graph_node(self, state: SubAgentState, config: RunnableConfig) -> Dict[str, Any]:
         """
         LangGraph 그래프 노드 메서드 (Send를 통해 SubAgentState를 수신)
 
@@ -89,14 +90,15 @@ class AgentNode(LLMNode):
             await self.initialize()
 
         task = state['task']
+        query = state['query']
         agent_name = state['agent_name']
         step_number = state.get('step_number', 0)
         agent_results = state.get("agent_results", [])
 
         logger.info(f"[{self.name}] 태스크 실행: {task}")
-
+        
         try:
-            message = self._build_agent_message(task, agent_results)
+            message = self._build_agent_message(query, task, agent_results)
 
             all_tools = self.base_tools + self.mcp_tools
             agent_graph = create_react_agent_graph(
@@ -105,9 +107,10 @@ class AgentNode(LLMNode):
                 system_prompt=self.prompt
             )
 
-            graph_result = await agent_graph.ainvoke({
-                "messages": [HumanMessage(message)]
-            })
+            graph_result = await agent_graph.ainvoke(
+                {"messages": [HumanMessage(message)]},
+                config=config
+            )
 
             result = graph_result['messages'][-1].content
 
@@ -136,6 +139,7 @@ class AgentNode(LLMNode):
 
     def _build_agent_message(
         self,
+        query: str,
         task: str,
         agent_results: List[AgentResult]
     ) -> str:
@@ -158,4 +162,4 @@ class AgentNode(LLMNode):
             for agent_result in recent_agent_results
         ) if recent_agent_results else "No previous agent execution"
 
-        return f"Task: {task}\nAgent Results: {agent_summary}"
+        return f"Query: {query}\nTask: {task}\nAgent Results: {agent_summary}"

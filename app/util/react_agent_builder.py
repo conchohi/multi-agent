@@ -1,5 +1,5 @@
 """Base ReAct agent implementation."""
-from langgraph.graph import StateGraph, MessagesState, START, END
+from langgraph.graph import StateGraph, MessagesState, START
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import SystemMessage
 from langchain_core.language_models import BaseChatModel
@@ -25,7 +25,7 @@ def create_react_agent_graph(
 
     workflow = StateGraph(MessagesState)
 
-    def call_model(state: MessagesState):
+    async def call_model(state: MessagesState):
         """Agent reasoning step - decide to use tools or respond.
 
         Args:
@@ -40,9 +40,8 @@ def create_react_agent_graph(
         if not messages or not isinstance(messages[0], SystemMessage):
             messages = [SystemMessage(content=system_prompt)] + messages
 
-
-        # Call LLM with tools bound
-        response = llm_with_tools.invoke(messages)
+        # Call LLM with tools bound (async for streaming callback propagation)
+        response = await llm_with_tools.ainvoke(messages)
 
         return {"messages": [response]}
     

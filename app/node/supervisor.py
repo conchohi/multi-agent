@@ -80,37 +80,46 @@ class Supervisor(LLMNode):
 
         task_assignments = []
 
+        # plan 노드에서 오류 발생 시, 계획이 0단계 일 경우
+        if len(steps) == 0:
+            return {
+                "task_assignments" : [{
+                    "agent_name": self._apply_fallback(),
+                    "task": user_query,
+                    "step_number": 1,
+                    "agent_results": agent_results[:-3]
+                }]
+            }
+
         if execution_mode == 'parallel':
             prev_assignments = state.get('task_assignments', [])
             
             if not prev_assignments:
                 # 병렬 실행: 모든 step의 에이전트를 한 번에 선택
                 for i, step in enumerate(steps):
-                    agent_name = await self._select_agent(task=step.task, user_query=user_query)
+                    agent_name = await self._select_agent(task=step.task)
                     logger.info(f"[SUPERVISOR] 병렬 Step {i + 1}/{len(steps)} → {agent_name}: {step.task[:60]}")
                     task_assignments.append({
                         "agent_name": agent_name,
                         "task": step.task,
-                        "step_number": step.step_number,
-                        "agent_results": agent_results[:-3]
+                        "step_number": step.step_number
                     })
         else:
             # 순차 실행: current_step에 해당하는 step 하나만 선택
             current_step = state.get('current_step', 0)
             if current_step < len(steps):
                 step = steps[current_step]
-                agent_name = await self._select_agent(task=step.task, user_query=user_query)
+                agent_name = await self._select_agent(task=step.task)
                 logger.info(f"[SUPERVISOR] 순차 Step {current_step + 1}/{len(steps)} → {agent_name}: {step.task[:60]}")
                 task_assignments.append({
                     "agent_name": agent_name,
                     "task": step.task,
-                    "step_number": step.step_number,
-                    "agent_results": agent_results[:-3]
+                    "step_number": step.step_number
                 })
 
         return {"task_assignments": task_assignments}
 
-    async def _select_agent(self, task: str, user_query: str) -> str:
+    async def _select_agent(self, task: str) -> str:
         """
         Task를 분석하여 최적의 agent 선택 (LLM 기반, 실패 시 폴백)
         """
@@ -120,7 +129,6 @@ class Supervisor(LLMNode):
 
             result = await selection_chain.ainvoke({
                 "task": task,
-                "user_query": user_query,
                 "agent_info": self.agent_info
             })
 

@@ -45,7 +45,7 @@ class AgentState(TypedDict):
     plans: Annotated[List[ExecutionPlan], list_reducer]
     plan: Optional[ExecutionPlan]
     replan_count: int
-    current_step: Annotated[int, lambda a, b: max(a, b)]
+    current_step: Annotated[int, lambda _, new: new]
 
     # Supervisor → Agent 노드 라우팅 정보
     task_assignments: Optional[List[Dict[str, Any]]]

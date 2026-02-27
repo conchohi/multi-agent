@@ -7,7 +7,6 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="사용자 질문", min_length=1)
     session_id: Optional[str] = Field(default=None, description="세션 ID (선택)")
 
-
 class AgentResultResponse(BaseModel):
     """에이전트 실행 결과"""
     name: str = Field(..., description="에이전트 이름")
@@ -35,7 +34,7 @@ class QueryResponse(BaseModel):
 
 class StreamEvent(BaseModel):
     """스트리밍 이벤트"""
-    event: Literal['node', 'plan', 'supervisor', 'agent_result', 'evaluation','final_answer', 'error'] = Field(..., description="이벤트 타입")
+    event: Literal['node', 'plan', 'supervisor', 'agent_result', 'agent_result_chunk', 'evaluation', 'final_answer', 'final_answer_chunk', 'error'] = Field(..., description="이벤트 타입")
     node: Optional[str] = Field(default=None, description="현재 노드 이름")
     data: Optional[dict] = Field(default=None, description="이벤트 데이터")
 
